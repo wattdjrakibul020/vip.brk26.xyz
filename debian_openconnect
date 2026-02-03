@@ -17,9 +17,9 @@ echo 'Installing dependencies.'
 {
 export DEBIAN_FRONTEND=noninteractive
 apt update
-apt install -y curl wget cron python-minimal libpython-stdlib
+apt install -y curl wget cron python3 mariadb-client
 apt install -y iptables freeradius freeradius-mysql freeradius-utils
-apt install -y ocserv default-mysql-client netcat httpie php neofetch vnstat
+apt install -y ocserv netcat-openbsd httpie php neofetch vnstat
 apt install -y screen squid stunnel4 dropbear gnutls-bin python pwgen
 apt install -y dos2unix nano unzip jq virt-what net-tools
 apt install -y mlocate dh-make libaudit-dev build-essential fail2ban
@@ -70,23 +70,22 @@ echo "Preparing authentication module."
       send_application_name = yes
 
     }' >> /etc/freeradius/3.0/mods-available/sql
- echo "
-    server = "$HOST"
+# install_freeradius ফাংশনের ভেতর 'sql { ... }' অংশটি এভাবে লিখুন:
+echo 'sql {
+    dialect = "mysql"
+    driver = "rlm_sql_mysql"
+    server = "'$HOST'"
     port = 3306
-    login = "$USER"
-    password = "$PASS"
-    radius_db = "$DBNAME"
-    " >> /etc/freeradius/3.0/mods-available/sql
- echo 'acct_table1 = "radacct"
-   acct_table2 = "radacct"
-   postauth_table = "radpostauth"
-   authcheck_table = "radcheck"
-   groupcheck_table = "radgroupcheck"
-   authreply_table = "radreply"
-   groupreply_table = "radgroupreply"
-   usergroup_table = "radusergroup"
-   delete_stale_sessions = yes
-
+    login = "'$USER'"
+    password = "'$PASS'"
+    radius_db = "'$DBNAME'"
+    acct_table1 = "radacct"
+    postauth_table = "radpostauth"
+    authcheck_table = "radcheck"
+    authreply_table = "radreply"
+    usergroup_table = "radusergroup"
+    $INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf
+}' > /etc/freeradius/3.0/mods-available/sql
     pool {
 
       start = ${thread[pool].start_servers}
@@ -288,7 +287,7 @@ try-mtu-discovery = false
 switch-to-tcp-timeout = 25
 max-same-clients = 100
 cert-user-oid = 0.9.2342.19200300.100.1.1
-tls-priorities = "NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM"
+tls-priorities = "NORMAL:%COMPAT:-VERS-TLS1.3"
 auth-timeout = 240
 min-reauth-time = 3
 max-ban-score = 0
@@ -341,7 +340,8 @@ clear
 install_firewall_kvm () {
 clear
 echo "Installing iptables."
-echo "net.ipv4.ip_forward=1
+echo 1 > /proc/sys/net/ipv4/ip_forward
+sysctl -p
 net.ipv4.conf.all.rp_filter=0
 net.ipv4.conf."$server_interface".rp_filter=0" >> /etc/sysctl.conf
 sysctl -p
@@ -750,3 +750,4 @@ install_firewall_kvm
 install_stunnel
 install_rclocal
 start_service
+
