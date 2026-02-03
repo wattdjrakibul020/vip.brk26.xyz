@@ -249,7 +249,7 @@ echo "Installing openconnect."
 #  {
 #    gencert=$(echo "$(pwgen 15 1)" | tr '[:upper:]' '[:lower:]')
 #    genip=$(curl -s https://api.ipify.org)
-#    curl -X POST "https://api.cloudflare.com/client/v4/zones/df777494b162da403e84033a983492a3/dns_records" -H "X-Auth-Email: mrakibul020@gmail.com" -H "X-Auth-Key: 80489b082fb0cb9dc014b5838cc93e95452fe" -H "Content-Type: application/json" --data '{"type":"A","name":"cert-'"$(echo $gencert)"'","content":"'"$(curl -s https://api.ipify.org)"'","ttl":1,"priority":0,"proxied":false}'
+#    curl -X POST "https://api.cloudflare.com/client/v4/zones/5e9c7930f8dbd229e9f54448a9197616/dns_records" -H "X-Auth-Email: dev.imkobz@gmail.com" -H "X-Auth-Key: 17dc17ceba5d6e7fe3587c55a40521a217e81" -H "Content-Type: application/json" --data '{"type":"A","name":"cert-'"$(echo $gencert)"'","content":"'"$(curl -s https://api.ipify.org)"'","ttl":1,"priority":0,"proxied":false}'
 #    sleep 60
 #    echo "<VirtualHost *:80>
 #            ServerName cert-$(echo $gencert).paneldemo.xyz
@@ -628,6 +628,7 @@ ADDR=$1
 AUTH=$2
 SEND=$3
 RECV=$4
+
 USERNAME=$(echo "$AUTH" | cut -d ":" -f 1)
 PASSWORD=$(echo "$AUTH" | cut -d ":" -f 2)
 
