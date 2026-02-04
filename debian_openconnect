@@ -240,43 +240,55 @@ clear
 install_openconnect()
 {
 clear
-echo "Installing openconnect."
-{
-    echo 'DNS=1.1.1.1
+
+echo 'DNS=1.1.1.1
 DNSStubListener=no' >> /etc/systemd/resolved.conf
 
-    cd /etc/ocserv/
-    # SSL সার্টিফিকেট জেনারেট (অ্যাপ কানেক্ট করার সময় সার্টিফিকেট 'Trust' বা 'Accept' করতে হবে)
-    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
-
-    rm -f ocserv.conf
-    # কানেক্ট এবং ডিসকানেক্ট স্ক্রিপ্ট ডাউনলোড
-    wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
-    wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
-    chmod +x go_connect go_disconnect
-    sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
-
-    # নতুন কনফিগারেশন ফাইল
-    cat <<EOF > /etc/ocserv/ocserv.conf
-auth = "radius [config=/etc/radcli/radiusclient.conf]"
-tcp-port = $PORT_TCP
-udp-port = $PORT_TCP
+echo "Installing openconnect."
+{
+#  {
+#    gencert=$(echo "$(pwgen 15 1)" | tr '[:upper:]' '[:lower:]')
+#    genip=$(curl -s https://api.ipify.org)
+#    curl -X POST "https://api.cloudflare.com/client/v4/zones/5e9c7930f8dbd229e9f54448a9197616/dns_records" -H "X-Auth-Email: dev.imkobz@gmail.com" -H "X-Auth-Key: 17dc17ceba5d6e7fe3587c55a40521a217e81" -H "Content-Type: application/json" --data '{"type":"A","name":"cert-'"$(echo $gencert)"'","content":"'"$(curl -s https://api.ipify.org)"'","ttl":1,"priority":0,"proxied":false}'
+#    sleep 60
+#    echo "<VirtualHost *:80>
+#            ServerName cert-$(echo $gencert).paneldemo.xyz
+#
+#            DocumentRoot /var/www/cert-$(echo $gencert).paneldemo.xyz
+#    </VirtualHost>" >> /etc/apache2/sites-available/cert-$(echo $gencert).paneldemo.xyz.conf
+#    sudo mkdir /var/www/cert-$(echo $gencert).paneldemo.xyz
+#    sudo chown www-data:www-data /var/www/cert-$(echo $gencert).paneldemo.xyz -R
+#    sudo a2ensite cert-$(echo $gencert).paneldemo.xyz
+#    sudo systemctl reload apache2
+#    sudo certbot certonly --non-interactive --webroot --agree-tos --email dev.imkobz@gmail.com -d cert-$(echo $gencert).paneldemo.xyz -w /var/www/cert-$(echo $gencert).paneldemo.xyz
+#  } &>/dev/null
+cd /etc/ocserv/
+#wget --no-check-certificate https://pastebin.com/raw/2e3ZXk6P -O server.pem;wget --no-check-certificate https://pastebin.com/raw/8UA7xQwE -O server.crt;wget --no-check-certificate https://pastebin.com/raw/CLPw2uuK -O server.key
+#wget --no-check-certificate https://pastebin.com/raw/Gv8MP2NF -O fullchain.pem;wget --no-check-certificate https://pastebin.com/raw/NW4Vzbw9 -O privkey.pem
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
+rm ocserv.conf
+wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
+wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
+chmod +x go_connect go_disconnect
+sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
+echo 'auth = "radius [config=/etc/radcli/radiusclient.conf]"
+tcp-port = '$PORT_TCP'
+udp-port = '$PORT_TCP'
 run-as-user = nobody
 run-as-group = daemon
 socket-file = /var/run/ocserv-socket
 server-cert = /etc/ocserv/ocserv.pem
 server-key = /etc/ocserv/ocserv.pem
-ca-cert = /etc/ocserv/ocserv.pem
+ca-cert = /etc/ssl/certs/ssl-cert-snakeoil.pem
 isolate-workers = false
-max-clients = 1024
-max-same-clients = 0
-keepalive = 32400
+keepalive = 360
 dpd = 90
 mobile-dpd = 1800
+try-mtu-discovery = false
 switch-to-tcp-timeout = 25
-try-mtu-discovery = true
+max-same-clients = 100
 cert-user-oid = 0.9.2342.19200300.100.1.1
-tls-priorities = "NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM:+AES-256-GCM"
+tls-priorities = "NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM"
 auth-timeout = 240
 min-reauth-time = 3
 max-ban-score = 0
@@ -287,26 +299,42 @@ rekey-time = 172800
 rekey-method = ssl
 use-utmp = true
 pid-file = /var/run/ocserv.pid
-device = vpns
+device = vpns_
 predictable-ips = true
 ipv4-network = 192.168.119.0/21
 tunnel-all-dns = true
 dns = 1.1.1.1
-dns = 8.8.8.8
 ping-leases = false
 cisco-client-compat = true
 dtls-legacy = true
 connect-script = /etc/ocserv/go_connect
-disconnect-script = /etc/ocserv/go_disconnect
-EOF
+disconnect-script = /etc/ocserv/go_disconnect' >> /etc/ocserv/ocserv.conf
 } &>/dev/null
-
-# সার্ভিস ম্যানেজমেন্ট ফিক্স
 cp /lib/systemd/system/ocserv.service /etc/systemd/system/ocserv.service
+cd /etc/systemd/system/
+rm ocserv.service
+echo '[Unit]
+Description=FirenetDev OpenConnect SSL VPN server
+Documentation=man:ocserv(8)
+After=network-online.target
+
+[Service]
+PrivateTmp=true
+PIDFile=/var/run/ocserv.pid
+ExecStart=/usr/sbin/ocserv --foreground --pid-file /var/run/ocserv.pid --config /etc/ocserv/ocserv.conf
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+' >> /etc/systemd/system/ocserv.service
+
+{
 systemctl daemon-reload
-systemctl stop ocserv.socket &>/dev/null
-systemctl disable ocserv.socket &>/dev/null
+systemctl stop ocserv.socket
+systemctl disable ocserv.socket
 systemctl restart ocserv.service
+clear
+}&>/dev/null
 clear
 }
 
@@ -315,27 +343,23 @@ clear
 echo "Installing iptables."
 echo "net.ipv4.ip_forward=1
 net.ipv4.conf.all.rp_filter=0
-net.ipv4.conf.all.accept_source_route=1
-net.ipv4.conf.all.send_redirects=0" >> /etc/sysctl.conf
+net.ipv4.conf."$server_interface".rp_filter=0" >> /etc/sysctl.conf
 sysctl -p
 {
-    iptables -F
-    iptables -t nat -F
-    # পোর্ট ওপেনিং
-    iptables -A INPUT -p tcp --dport $PORT_TCP -j ACCEPT
-    iptables -A INPUT -p udp --dport $PORT_TCP -j ACCEPT
-    iptables -A INPUT -p tcp --dport $PORT_SSL -j ACCEPT
-
-    # ফরোয়ার্ডিং ও মাস্ক্যারেড
-    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
-    iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
-
-    # MTU Fix (এটি ছাড়া অ্যাপে টাইম-আউট দেখাবে)
-    iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-
-    iptables-save > /etc/iptables_rules.v4
-    ip6tables-save > /etc/iptables_rules.v6
+iptables -F
+iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+iptables -t nat -A PREROUTING -i "$server_interface" -p udp -m udp --dport 10000:50000 -j DNAT --to-destination :5666
+iptables -A INPUT -p tcp --dport 3306 -j ACCEPT
+iptables -I INPUT -p udp --dport 3306 -j ACCEPT
+iptables -I INPUT -p tcp --dport $PORT_TCP -j ACCEPT
+iptables -I INPUT -p udp --dport $PORT_TCP -j ACCEPT
+iptables -I INPUT -p tcp --dport 4444 -j ACCEPT
+iptables -I FORWARD -s 192.168.119.0/21 -j ACCEPT
+iptables -I FORWARD -d 192.168.119.0/21 -j ACCEPT
+iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ") -j MASQUERADE
+iptables-save > /etc/iptables_rules.v4
+ip6tables-save > /etc/iptables_rules.v6
+clear
 }&>/dev/null
 clear
 }
@@ -685,8 +709,6 @@ sed -i "s|PORT_SSL|$PORT_SSL|g" /root/.ports
 start_service () {
 clear
 {
-# প্যানেলে সার্ভার স্ট্যাটাস আপডেট
-mysql -h $HOST -u $USER -p$PASS -D $DBNAME -e "UPDATE servers SET server_status='online', last_checkin=NOW() WHERE server_ip='$server_ip'"
 
 sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' || /etc/init.d/stunnel4 restart 
 @daily certbot renew --quiet && systemctl restart ocserv
@@ -696,9 +718,9 @@ sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' 
 sudo systemctl restart cron
 } 
 echo '+++++++++++++++++++++++++++++++++++'
-echo '* OPENCONNECT is ready!      *'
-echo '+++++++++++++++++++++++++++++++++++'
-echo -e "[IP] : $server_ip\n[Port] : $PORT_TCP\n"
+echo '*      OPENCONNECT  is ready!     *'
+echo '+++++++++++************++++++++++++'
+echo -e "[IP] : $server_ip\n[Openconnect TCP Port] : $PORT_TCP\n[Openconnect UDP Port] : $PORT_UDP\n[Ssl Port] : $PORT_SSL\n[Proxy Socks ] : 80\n[Hysteria Port ] : 5666\n[Proxy Squid 1] : 8080\n[Proxy Squid 2] : 3128\n"
 
 history -c;
 rm /usr/local/etc/.system
@@ -706,10 +728,11 @@ echo "DB_HOST='$HOST'" >> ~/.db-base
 echo "DB_NAME='$DBNAME'" >> ~/.db-base
 echo "DB_USER='$USER'" >> ~/.db-base
 echo "DB_PASS='$PASS'" >> ~/.db-base
-echo 'Server will reboot after 20 seconds'
+echo 'Server will secure this server and reboot after 20 seconds'
 sleep 20
 reboot
 }
+
 server_ip=$(curl -s https://api.ipify.org)
 server_interface=$(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ")
 
