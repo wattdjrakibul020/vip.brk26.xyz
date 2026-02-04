@@ -240,25 +240,23 @@ clear
 install_openconnect()
 {
 clear
-echo "Installing openconnect."
-{
-    echo 'DNS=1.1.1.1
+
+echo 'DNS=1.1.1.1
 DNSStubListener=no' >> /etc/systemd/resolved.conf
 
-    cd /etc/ocserv/
-    # SSL সার্টিফিকেট জেনারেট
-    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
-    
-    rm -f ocserv.conf
-    wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
-    wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
-    chmod +x go_connect go_disconnect
-    sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
+echo "Installing openconnect."
+{
+cd /etc/ocserv/
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
+rm ocserv.conf
+wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
+wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
+chmod +x go_connect go_disconnect
+sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
 
-    # সংশোধিত কনফিগারেশন
-    echo "auth = \"radius [config=/etc/radcli/radiusclient.conf]\"
-tcp-port = $PORT_TCP
-udp-port = $PORT_TCP
+echo 'auth = "radius [config=/etc/radcli/radiusclient.conf]"
+tcp-port = '$PORT_TCP'
+udp-port = '$PORT_TCP'
 run-as-user = nobody
 run-as-group = daemon
 socket-file = /var/run/ocserv-socket
@@ -266,14 +264,14 @@ server-cert = /etc/ocserv/ocserv.pem
 server-key = /etc/ocserv/ocserv.pem
 ca-cert = /etc/ocserv/ocserv.pem
 isolate-workers = false
-keepalive = 32400
+keepalive = 360
 dpd = 90
 mobile-dpd = 1800
-try-mtu-discovery = true
+try-mtu-discovery = false
 switch-to-tcp-timeout = 25
-max-same-clients = 0
+max-same-clients = 100
 cert-user-oid = 0.9.2342.19200300.100.1.1
-tls-priorities = \"NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM:+AES-256-GCM\"
+tls-priorities = "NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM"
 auth-timeout = 240
 min-reauth-time = 3
 max-ban-score = 0
@@ -284,24 +282,43 @@ rekey-time = 172800
 rekey-method = ssl
 use-utmp = true
 pid-file = /var/run/ocserv.pid
-device = vpns
+device = vpns_
 predictable-ips = true
 ipv4-network = 192.168.119.0/21
 tunnel-all-dns = true
 dns = 1.1.1.1
-dns = 8.8.8.8
 ping-leases = false
 cisco-client-compat = true
 dtls-legacy = true
 connect-script = /etc/ocserv/go_connect
-disconnect-script = /etc/ocserv/go_disconnect" >> /etc/ocserv/ocserv.conf
+disconnect-script = /etc/ocserv/go_disconnect' >> /etc/ocserv/ocserv.conf
 } &>/dev/null
 
 cp /lib/systemd/system/ocserv.service /etc/systemd/system/ocserv.service
+cd /etc/systemd/system/
+rm ocserv.service
+echo '[Unit]
+Description=FirenetDev OpenConnect SSL VPN server
+Documentation=man:ocserv(8)
+After=network-online.target
+
+[Service]
+PrivateTmp=true
+PIDFile=/var/run/ocserv.pid
+ExecStart=/usr/sbin/ocserv --foreground --pid-file /var/run/ocserv.pid --config /etc/ocserv/ocserv.conf
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+' >> /etc/systemd/system/ocserv.service
+
+{
 systemctl daemon-reload
-systemctl stop ocserv.socket &>/dev/null
-systemctl disable ocserv.socket &>/dev/null
+systemctl stop ocserv.socket
+systemctl disable ocserv.socket
 systemctl restart ocserv.service
+clear
+}&>/dev/null
 clear
 }
 
@@ -310,27 +327,27 @@ clear
 echo "Installing iptables."
 echo "net.ipv4.ip_forward=1
 net.ipv4.conf.all.rp_filter=0
-net.ipv4.conf.all.accept_source_route=1
-net.ipv4.conf.all.send_redirects=0" >> /etc/sysctl.conf
+net.ipv4.conf."$server_interface".rp_filter=0" >> /etc/sysctl.conf
 sysctl -p
 {
-    iptables -F
-    iptables -t nat -F
-    
-    # পোর্ট ওপেনিং
-    iptables -A INPUT -p tcp --dport $PORT_TCP -j ACCEPT
-    iptables -A INPUT -p udp --dport $PORT_TCP -j ACCEPT
-    
-    # ফরওয়ার্ডিং এবং মাস্ক্যারেড
-    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
-    iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
+iptables -F
+iptables -t nat -F
 
-    # MTU Fix (এটি ছাড়া আধুনিক অ্যাপ কানেক্ট হবে না)
-    iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+# পোর্ট ওপেনিং
+iptables -I INPUT -p tcp --dport $PORT_TCP -j ACCEPT
+iptables -I INPUT -p udp --dport $PORT_TCP -j ACCEPT
 
-    iptables-save > /etc/iptables_rules.v4
-    ip6tables-save > /etc/iptables_rules.v6
+# ফরওয়ার্ডিং রুলস
+iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -I FORWARD -s 192.168.119.0/21 -j ACCEPT
+iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ") -j MASQUERADE
+
+# MTU ফিক্স (এটিই আসল সমাধান)
+iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+iptables-save > /etc/iptables_rules.v4
+ip6tables-save > /etc/iptables_rules.v6
+clear
 }&>/dev/null
 clear
 }
