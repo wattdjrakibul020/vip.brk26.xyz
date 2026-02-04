@@ -237,24 +237,27 @@ clear
 clear
 }
 
-install_openconnect() {
-    clear
-    echo "Installing openconnect."
-    {
-        echo 'DNS=1.1.1.1
+install_openconnect()
+{
+clear
+echo "Installing openconnect."
+{
+echo 'DNS=1.1.1.1
 DNSStubListener=no' >> /etc/systemd/resolved.conf
 
-        cd /etc/ocserv/
-        openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
-        rm -f ocserv.conf
+cd /etc/ocserv/
+# SSL সার্টিফিকেট জেনারেট
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
 
-        wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
-        wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
-        chmod +x go_connect go_disconnect
-        sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
+rm -f ocserv.conf
+# কানেক্ট এবং ডিসকানেক্ট স্ক্রিপ্ট ডাউনলোড
+wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
+wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
+chmod +x go_connect go_disconnect
+sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
 
-        # আধুনিক কনফিগারেশন যা Windows/Android অ্যাপে সাপোর্ট করবে
-        cat <<EOF > /etc/ocserv/ocserv.conf
+# সংশোধিত কনফিগারেশন ফাইল
+cat <<EOF > /etc/ocserv/ocserv.conf
 auth = "radius [config=/etc/radcli/radiusclient.conf]"
 tcp-port = $PORT_TCP
 udp-port = $PORT_TCP
@@ -263,10 +266,10 @@ run-as-group = daemon
 socket-file = /var/run/ocserv-socket
 server-cert = /etc/ocserv/ocserv.pem
 server-key = /etc/ocserv/ocserv.pem
-ca-cert = /etc/ssl/certs/ssl-cert-snakeoil.pem
-isolate-workers = true
+ca-cert = /etc/ocserv/ocserv.pem
+isolate-workers = false
 max-clients = 1024
-max-same-clients = 10
+max-same-clients = 0
 keepalive = 32400
 dpd = 90
 mobile-dpd = 1800
@@ -296,44 +299,45 @@ dtls-legacy = true
 connect-script = /etc/ocserv/go_connect
 disconnect-script = /etc/ocserv/go_disconnect
 EOF
-    } &>/dev/null
-    
-    # Systemd fix
-    cp /lib/systemd/system/ocserv.service /etc/systemd/system/ocserv.service
-    sed -i 's/ocserv.socket/ocserv.service/g' /etc/systemd/system/ocserv.service
-    systemctl daemon-reload
-    systemctl stop ocserv.socket &>/dev/null
-    systemctl disable ocserv.socket &>/dev/null
-    systemctl enable ocserv.service
+} &>/dev/null
+
+# Service management fix
+cp /lib/systemd/system/ocserv.service /etc/systemd/system/ocserv.service
+systemctl daemon-reload
+systemctl stop ocserv.socket &>/dev/null
+systemctl disable ocserv.socket &>/dev/null
+systemctl restart ocserv.service
+clear
 }
 
 install_firewall_kvm () {
-    clear
-    echo "Installing iptables."
-    {
-        echo "net.ipv4.ip_forward=1
+clear
+echo "Installing iptables."
+echo "net.ipv4.ip_forward=1
 net.ipv4.conf.all.rp_filter=0
 net.ipv4.conf.all.accept_source_route=1
 net.ipv4.conf.all.send_redirects=0" >> /etc/sysctl.conf
-        sysctl -p
+sysctl -p
+{
+iptables -F
+iptables -t nat -F
+# Port Opening
+iptables -A INPUT -p tcp --dport $PORT_TCP -j ACCEPT
+iptables -A INPUT -p udp --dport $PORT_TCP -j ACCEPT
+iptables -A INPUT -p tcp --dport $PORT_SSL -j ACCEPT
 
-        iptables -F
-        iptables -t nat -F
-        
-        # OpenConnect Ports
-        iptables -I INPUT -p tcp --dport $PORT_TCP -j ACCEPT
-        iptables -I INPUT -p udp --dport $PORT_TCP -j ACCEPT
-        
-        # Forwarding & Masquerade
-        iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-        iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
-        iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
+# Forwarding & Masquerade
+iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
+iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
 
-        # MTU Fix (এটি ছাড়া অ্যাপ কানেক্ট হতে সমস্যা হয়)
-        iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+# MTU Fix (Windows 11 এবং Android অ্যাপের জন্য জরুরি)
+iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
-        iptables-save > /etc/iptables_rules.v4
-    }&>/dev/null
+iptables-save > /etc/iptables_rules.v4
+ip6tables-save > /etc/iptables_rules.v6
+}&>/dev/null
+clear
 }
 
 install_stunnel() {
@@ -679,32 +683,32 @@ sed -i "s|PORT_SSL|$PORT_SSL|g" /root/.ports
 }
 
 start_service () {
-    clear
-    echo 'Starting services and updating panel...'
-    {
-        # প্যানেলে সার্ভার একটিভ করার কুয়েরি
-        mysql -h $HOST -u $USER -p$PASS -D $DBNAME -e "UPDATE servers SET server_status='online', last_checkin=NOW() WHERE server_ip='$server_ip'"
-        
-        sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' || /etc/init.d/stunnel4 restart 
+clear
+{
+# প্যানেলে সার্ভার স্ট্যাটাস আপডেট
+mysql -h $HOST -u $USER -p$PASS -D $DBNAME -e "UPDATE servers SET server_status='online', last_checkin=NOW() WHERE server_ip='$server_ip'"
+
+sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' || /etc/init.d/stunnel4 restart 
 @daily certbot renew --quiet && systemctl restart ocserv
 * * * * * /bin/bash /etc/.ws >/dev/null 2>&1
 * * * * * /bin/bash /etc/.hysteria >/dev/null 2>&1
 * * * * * /bin/bash /etc/.monitor openconnect >/dev/null 2>&1"; } | crontab -
-        sudo systemctl restart cron
-    } 
-    echo '+++++++++++++++++++++++++++++++++++'
-    echo '* OPENCONNECT is ready!      *'
-    echo '+++++++++++++++++++++++++++++++++++'
-    echo -e "[IP] : $server_ip\n[Port] : $PORT_TCP\n"
-    
-    # প্যানেল ফাইল আপডেট
-    echo "DB_HOST='$HOST'" >> ~/.db-base
-    echo "DB_NAME='$DBNAME'" >> ~/.db-base
-    echo "DB_USER='$USER'" >> ~/.db-base
-    echo "DB_PASS='$PASS'" >> ~/.db-base
-    
-    sleep 5
-    reboot
+sudo systemctl restart cron
+} 
+echo '+++++++++++++++++++++++++++++++++++'
+echo '* OPENCONNECT is ready!      *'
+echo '+++++++++++++++++++++++++++++++++++'
+echo -e "[IP] : $server_ip\n[Port] : $PORT_TCP\n"
+
+history -c;
+rm /usr/local/etc/.system
+echo "DB_HOST='$HOST'" >> ~/.db-base
+echo "DB_NAME='$DBNAME'" >> ~/.db-base
+echo "DB_USER='$USER'" >> ~/.db-base
+echo "DB_PASS='$PASS'" >> ~/.db-base
+echo 'Server will reboot after 20 seconds'
+sleep 20
+reboot
 }
 server_ip=$(curl -s https://api.ipify.org)
 server_interface=$(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ")
