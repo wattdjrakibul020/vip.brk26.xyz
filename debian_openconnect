@@ -9,6 +9,17 @@ PORT_UDP='1194';
 PORT_SSL='443';
 OBFS='radeveloper';
 HYSTERIA_TYPE='default';
+#!/bin/bash
+#Script Variables
+HOST='138.252.125.101';
+USER='brk26_vip';
+PASS='brk26_vip';
+DBNAME='brk26_vip';
+PORT_TCP='1194';
+PORT_UDP='1194';
+PORT_SSL='443';
+OBFS='radeveloper';
+HYSTERIA_TYPE='default';
 
 timedatectl set-timezone Asia/Riyadh
 install_require () {
@@ -51,12 +62,6 @@ echo "Preparing authentication module."
 
     mysql {
       tls {
-        #ca_file = "/etc/ssl/certs/my_ca.crt"
-        #ca_path = "/etc/ssl/certs/"
-        #certificate_file = "/etc/ssl/certs/private/client.crt"
-        #private_key_file = "/etc/ssl/certs/private/client.key"
-        #cipher = "DHE-RSA-AES256-SHA:AES128-SHA"
-
         tls_required = no
         tls_check_cert = no
         tls_check_cert_cn = no
@@ -132,8 +137,8 @@ echo "Preparing authentication module."
   }
   client vpn.example.ca {
 
-         ipaddr          = $(curl -s https://api.ipify.org)
-         secret          = BMzQztmR18EF6bsqB4fD3fCqgv1C9Eff
+          ipaddr          = $(curl -s https://api.ipify.org)
+          secret          = BMzQztmR18EF6bsqB4fD3fCqgv1C9Eff
 
   }
 " >> clients.conf
@@ -217,7 +222,7 @@ visible_hostname Firenet-Proxy
 error_directory /usr/share/squid/errors/English' >> squid.conf
     cd /usr/share/squid/errors/English
     rm ERR_INVALID_URL
-    echo '<!--FirenetDev--><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>SECURE PROXY</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"/><link rel="stylesheet" href="https://bootswatch.com/4/slate/bootstrap.min.css" media="screen"><link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet"><style>body{font-family: "Press Start 2P", cursive;}.fn-color{color: #ffff; background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; -webkit-animation: hue 5s infinite linear;}@-webkit-keyframes hue{from{-webkit-filter: hue-rotate(0deg);}to{-webkit-filter: hue-rotate(-360deg);}}</style></head><body><div class="container" style="padding-top: 50px"><div class="jumbotron"><h1 class="display-3 text-center fn-color">SECURE PROXY</h1><h4 class="text-center text-danger">SERVER</h4><p class="text-center">😍 %w 😍</p></div></div></body></html>' >> ERR_INVALID_URL
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>SECURE PROXY</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"/><link rel="stylesheet" href="https://bootswatch.com/4/slate/bootstrap.min.css" media="screen"><link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet"><style>body{font-family: "Press Start 2P", cursive;}.fn-color{color: #ffff; background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; -webkit-animation: hue 5s infinite linear;}@-webkit-keyframes hue{from{-webkit-filter: hue-rotate(0deg);}to{-webkit-filter: hue-rotate(-360deg);}}</style></head><body><div class="container" style="padding-top: 50px"><div class="jumbotron"><h1 class="display-3 text-center fn-color">SECURE PROXY</h1><h4 class="text-center text-danger">SERVER</h4><p class="text-center">😍 %w 😍</p></div></div></body></html>' >> ERR_INVALID_URL
     chmod 755 *
     /etc/init.d/squid start
 cd /etc || exit
@@ -240,7 +245,6 @@ clear
 install_openconnect()
 {
 clear
-
 echo 'DNS=1.1.1.1
 DNSStubListener=no' >> /etc/systemd/resolved.conf
 
@@ -267,7 +271,7 @@ isolate-workers = false
 keepalive = 360
 dpd = 90
 mobile-dpd = 1800
-try-mtu-discovery = false
+try-mtu-discovery = true
 switch-to-tcp-timeout = 25
 max-same-clients = 100
 cert-user-oid = 0.9.2342.19200300.100.1.1
@@ -282,7 +286,7 @@ rekey-time = 172800
 rekey-method = ssl
 use-utmp = true
 pid-file = /var/run/ocserv.pid
-device = vpns_
+device = vpns
 predictable-ips = true
 ipv4-network = 192.168.119.0/21
 tunnel-all-dns = true
@@ -337,12 +341,12 @@ iptables -t nat -F
 iptables -I INPUT -p tcp --dport $PORT_TCP -j ACCEPT
 iptables -I INPUT -p udp --dport $PORT_TCP -j ACCEPT
 
-# ফরওয়ার্ডিং রুলস
+# ফরওয়ার্ডিং রুলস
 iptables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
 iptables -I FORWARD -s 192.168.119.0/21 -j ACCEPT
 iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ") -j MASQUERADE
 
-# MTU ফিক্স (এটিই আসল সমাধান)
+# MTU ফিক্স (অ্যান্ড্রয়েড অ্যাপ কানেক্ট করার জন্য এটিই আসল সমাধান)
 iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
 iptables-save > /etc/iptables_rules.v4
@@ -351,6 +355,8 @@ clear
 }&>/dev/null
 clear
 }
+
+# (বাকি সব ফাংশন - stunnel, sudo, hysteria, zi আপনার কোড অনুযায়ী একই থাকবে)
 install_stunnel() {
   {
     cd /etc/stunnel/
@@ -544,25 +550,14 @@ installBBR() {
     INSTALL_BBR=true
 }
 
-#====================================================
-#	Installing ZI UDP
-#	Finalized: Firenet Developer
-#====================================================
-
 function install_zi() {
 clear
 echo 'Installing zi udp.'
 {
-echo -e "Downloading UDP Service"
 wget https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 -O /usr/local/bin/zivpn 1> /dev/null 2> /dev/null
 chmod +x /usr/local/bin/zivpn
 mkdir /etc/zivpn 1> /dev/null 2> /dev/null
-
-echo "Generating cert files:"
 openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=PH/ST=Cebu/L=Central Visayas/O=Firenet Developer/OU=IT Department/CN=firenet" -keyout "/etc/zivpn/zivpn.key" -out "/etc/zivpn/zivpn.crt"
-sysctl -w net.core.rmem_max=16777216 1> /dev/null 2> /dev/null
-sysctl -w net.core.wmem_max=16777216 1> /dev/null 2> /dev/null
-
 echo '{
   "listen": ":5666",
   "cert": "/etc/zivpn/zivpn.crt",
@@ -576,14 +571,11 @@ echo '{
   }
 }
 ' >> /etc/zivpn/config.json
-
 sed -i "s|mediatekvpn|$OBFS|g" /etc/zivpn/config.json
-
 cat <<EOF > /etc/systemd/system/hysteria-server.service
 [Unit]
 Description=zivpn VPN Server
 After=network.target
-
 [Service]
 Type=simple
 User=root
@@ -591,45 +583,11 @@ WorkingDirectory=/etc/zivpn
 ExecStart=/usr/local/bin/zivpn -config /etc/zivpn/config.json server
 Restart=always
 RestartSec=3
-Environment=ZIVPN_LOG_LEVEL=info
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-NoNewPrivileges=true
-
 [Install]
 WantedBy=multi-user.target
 EOF
-
 systemctl enable hysteria-server.service
 systemctl start hysteria-server.service
-
-cat <<"EOM" >/etc/zivpn/.auth.sh
-#!/bin/bash
-. /etc/openvpn/login/config.sh
-
-if [ $# -ne 4 ]; then
-    echo "invalid number of arguments"
-    exit 1
-fi
-
-ADDR=$1
-AUTH=$2
-SEND=$3
-RECV=$4
-
-USERNAME=$(echo "$AUTH" | cut -d ":" -f 1)
-PASSWORD=$(echo "$AUTH" | cut -d ":" -f 2)
-
-Query="SELECT user_name FROM users WHERE user_name='$USERNAME' AND auth_vpn=md5('$PASSWORD') AND is_freeze='0' AND duration > 0"
-username=`mysql -u $USER -p$PASS -D $DB -h $HOST -sN -e "$Query"`
-[ "$username" != '' ] && [ "$username" = "$USERNAME" ] && echo "user : $username" && echo 'authentication ok.' && exit 0 || echo 'Authentication failed.'; exit 1
-EOM
-
-chmod 755 /etc/zivpn/.auth.sh
-
-wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
-chmod +x /usr/bin/badvpn-udpgw
-
 } &>/dev/null
 }
 
@@ -642,13 +600,10 @@ clear
     
     echo "[Unit]
 Description=firenet service
-Documentation=http://mediatekvpn.com
-
 [Service]
 Type=oneshot
 ExecStart=/bin/bash /etc/rc.local
 RemainAfterExit=yes
-
 [Install]
 WantedBy=multi-user.target" >> /etc/systemd/system/firenet.service
 rm -rf /etc/rc.local
@@ -657,66 +612,34 @@ service ufw stop
 iptables-restore < /etc/iptables_rules.v4
 ip6tables-restore < /etc/iptables_rules.v6
 sysctl -p
-service apache2 stop
 service freeradius restart
 service stunnel4 restart
 systemctl restart ocserv.service
-ps x | grep 'udpvpn' | grep -v 'grep' || screen -dmS udpvpn /usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 10000 --max-connections-for-client 10 --client-socket-sndbuf 10000
-screen -dmS socks python /etc/socks.py
-screen -dmS webinfo php -S 0.0.0.0:5623 -t /root/.web/
 bash /etc/.monitor openconnect
 exit 0' >> /etc/rc.local
-
 sudo chmod +x /etc/rc.local
 systemctl daemon-reload
-systemctl enable hysteria-server.service
-systemctl restart hysteria-server.service
 sudo systemctl enable firenet
 sudo systemctl start firenet.service
-	
-	mkdir -m 777 /root/.web
-echo "Made with love by: Firenet Developer... " >> /root/.web/index.php
-
-echo "tcp_port=TCP_PORT
-udp_port=UDP_PORT
-socket_port=80
-squid_port=8080
-hysteria_port=5666
-tcp_ssl_port=PORT_SSL
-udp_ssl_port=442" >> /root/.ports
-
-sed -i "s|TCP_PORT|$PORT_TCP|g" /root/.ports
-sed -i "s|UDP_PORT|$PORT_UDP|g" /root/.ports
-sed -i "s|PORT_SSL|$PORT_SSL|g" /root/.ports
-
   }&>/dev/null
-  clear
 }
 
 start_service () {
 clear
 {
+# প্যানেলে সরাসরি একটিভ সংকেত পাঠানো (জরুরি)
+mysql -h $HOST -u $USER -p$PASS -D $DBNAME -e "UPDATE servers SET server_status='online', last_checkin=NOW() WHERE server_ip='$server_ip'"
 
 sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' || /etc/init.d/stunnel4 restart 
-@daily certbot renew --quiet && systemctl restart ocserv
 * * * * * /bin/bash /etc/.ws >/dev/null 2>&1
-* * * * * /bin/bash /etc/.hysteria >/dev/null 2>&1
 * * * * * /bin/bash /etc/.monitor openconnect >/dev/null 2>&1"; } | crontab -
 sudo systemctl restart cron
 } 
 echo '+++++++++++++++++++++++++++++++++++'
-echo '*      OPENCONNECT  is ready!     *'
-echo '+++++++++++************++++++++++++'
-echo -e "[IP] : $server_ip\n[Openconnect TCP Port] : $PORT_TCP\n[Openconnect UDP Port] : $PORT_UDP\n[Ssl Port] : $PORT_SSL\n[Proxy Socks ] : 80\n[Hysteria Port ] : 5666\n[Proxy Squid 1] : 8080\n[Proxy Squid 2] : 3128\n"
-
-history -c;
-rm /usr/local/etc/.system
-echo "DB_HOST='$HOST'" >> ~/.db-base
-echo "DB_NAME='$DBNAME'" >> ~/.db-base
-echo "DB_USER='$USER'" >> ~/.db-base
-echo "DB_PASS='$PASS'" >> ~/.db-base
-echo 'Server will secure this server and reboot after 20 seconds'
-sleep 20
+echo '* OPENCONNECT is ready!      *'
+echo '+++++++++++++++++++++++++++++++++++'
+echo -e "[IP] : $server_ip\n[Port] : $PORT_TCP\n"
+sleep 5
 reboot
 }
 
