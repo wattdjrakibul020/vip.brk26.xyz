@@ -242,22 +242,22 @@ install_openconnect()
 clear
 echo "Installing openconnect."
 {
-echo 'DNS=1.1.1.1
+    echo 'DNS=1.1.1.1
 DNSStubListener=no' >> /etc/systemd/resolved.conf
 
-cd /etc/ocserv/
-# SSL সার্টিফিকেট জেনারেট
-openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
+    cd /etc/ocserv/
+    # SSL সার্টিফিকেট জেনারেট (অ্যাপ কানেক্ট করার সময় সার্টিফিকেট 'Trust' বা 'Accept' করতে হবে)
+    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
 
-rm -f ocserv.conf
-# কানেক্ট এবং ডিসকানেক্ট স্ক্রিপ্ট ডাউনলোড
-wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
-wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
-chmod +x go_connect go_disconnect
-sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
+    rm -f ocserv.conf
+    # কানেক্ট এবং ডিসকানেক্ট স্ক্রিপ্ট ডাউনলোড
+    wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
+    wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
+    chmod +x go_connect go_disconnect
+    sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
 
-# সংশোধিত কনফিগারেশন ফাইল
-cat <<EOF > /etc/ocserv/ocserv.conf
+    # নতুন কনফিগারেশন ফাইল
+    cat <<EOF > /etc/ocserv/ocserv.conf
 auth = "radius [config=/etc/radcli/radiusclient.conf]"
 tcp-port = $PORT_TCP
 udp-port = $PORT_TCP
@@ -301,7 +301,7 @@ disconnect-script = /etc/ocserv/go_disconnect
 EOF
 } &>/dev/null
 
-# Service management fix
+# সার্ভিস ম্যানেজমেন্ট ফিক্স
 cp /lib/systemd/system/ocserv.service /etc/systemd/system/ocserv.service
 systemctl daemon-reload
 systemctl stop ocserv.socket &>/dev/null
@@ -319,23 +319,23 @@ net.ipv4.conf.all.accept_source_route=1
 net.ipv4.conf.all.send_redirects=0" >> /etc/sysctl.conf
 sysctl -p
 {
-iptables -F
-iptables -t nat -F
-# Port Opening
-iptables -A INPUT -p tcp --dport $PORT_TCP -j ACCEPT
-iptables -A INPUT -p udp --dport $PORT_TCP -j ACCEPT
-iptables -A INPUT -p tcp --dport $PORT_SSL -j ACCEPT
+    iptables -F
+    iptables -t nat -F
+    # পোর্ট ওপেনিং
+    iptables -A INPUT -p tcp --dport $PORT_TCP -j ACCEPT
+    iptables -A INPUT -p udp --dport $PORT_TCP -j ACCEPT
+    iptables -A INPUT -p tcp --dport $PORT_SSL -j ACCEPT
 
-# Forwarding & Masquerade
-iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
-iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
+    # ফরোয়ার্ডিং ও মাস্ক্যারেড
+    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
+    iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
 
-# MTU Fix (Windows 11 এবং Android অ্যাপের জন্য জরুরি)
-iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    # MTU Fix (এটি ছাড়া অ্যাপে টাইম-আউট দেখাবে)
+    iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
-iptables-save > /etc/iptables_rules.v4
-ip6tables-save > /etc/iptables_rules.v6
+    iptables-save > /etc/iptables_rules.v4
+    ip6tables-save > /etc/iptables_rules.v6
 }&>/dev/null
 clear
 }
