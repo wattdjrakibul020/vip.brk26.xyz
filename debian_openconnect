@@ -17,9 +17,9 @@ echo 'Installing dependencies.'
 {
 export DEBIAN_FRONTEND=noninteractive
 apt update
-apt install -y curl wget cron python3 mariadb-client
+apt install -y curl wget cron python-minimal libpython-stdlib
 apt install -y iptables freeradius freeradius-mysql freeradius-utils
-apt install -y ocserv netcat-openbsd httpie php neofetch vnstat
+apt install -y ocserv default-mysql-client netcat httpie php neofetch vnstat
 apt install -y screen squid stunnel4 dropbear gnutls-bin python pwgen
 apt install -y dos2unix nano unzip jq virt-what net-tools
 apt install -y mlocate dh-make libaudit-dev build-essential fail2ban
@@ -70,22 +70,23 @@ echo "Preparing authentication module."
       send_application_name = yes
 
     }' >> /etc/freeradius/3.0/mods-available/sql
-# install_freeradius ফাংশনের ভেতর 'sql { ... }' অংশটি এভাবে লিখুন:
-echo 'sql {
-    dialect = "mysql"
-    driver = "rlm_sql_mysql"
-    server = "'$HOST'"
+ echo "
+    server = "$HOST"
     port = 3306
-    login = "'$USER'"
-    password = "'$PASS'"
-    radius_db = "'$DBNAME'"
-    acct_table1 = "radacct"
-    postauth_table = "radpostauth"
-    authcheck_table = "radcheck"
-    authreply_table = "radreply"
-    usergroup_table = "radusergroup"
-    $INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf
-}' > /etc/freeradius/3.0/mods-available/sql
+    login = "$USER"
+    password = "$PASS"
+    radius_db = "$DBNAME"
+    " >> /etc/freeradius/3.0/mods-available/sql
+ echo 'acct_table1 = "radacct"
+   acct_table2 = "radacct"
+   postauth_table = "radpostauth"
+   authcheck_table = "radcheck"
+   groupcheck_table = "radgroupcheck"
+   authreply_table = "radreply"
+   groupreply_table = "radgroupreply"
+   usergroup_table = "radusergroup"
+   delete_stale_sessions = yes
+
     pool {
 
       start = ${thread[pool].start_servers}
@@ -239,7 +240,67 @@ clear
 install_openconnect()
 {
 clear
+echo "Installing openconnect."
+{
+echo 'DNS=1.1.1.1
+DNSStubListener=no' >> /etc/systemd/resolved.conf
 
+cd /etc/ocserv/
+# SSL সার্টিফিকেট জেনারেট
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
+
+rm -f ocserv.conf
+# কানেক্ট এবং ডিসকানেক্ট স্ক্রিপ্ট ডাউনলোড
+wget --no-check-certificate -O go_connect firenetvpn.net/files/openconnect_files/go_connect.sh
+wget --no-check-certificate -O go_disconnect firenetvpn.net/files/openconnect_files/go_disconnect.sh
+chmod +x go_connect go_disconnect
+sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
+
+# কনফিগারেশন ফাইল তৈরি
+cat <<EOF > /etc/ocserv/ocserv.conf
+auth = "radius [config=/etc/radcli/radiusclient.conf]"
+tcp-port = $PORT_TCP
+udp-port = $PORT_TCP
+run-as-user = nobody
+run-as-group = daemon
+socket-file = /var/run/ocserv-socket
+server-cert = /etc/ocserv/ocserv.pem
+server-key = /etc/ocserv/ocserv.pem
+ca-cert = /etc/ssl/certs/ssl-cert-snakeoil.pem
+isolate-workers = true
+max-clients = 1024
+max-same-clients = 10
+keepalive = 32400
+dpd = 90
+mobile-dpd = 1800
+switch-to-tcp-timeout = 25
+try-mtu-discovery = true
+cert-user-oid = 0.9.2342.19200300.100.1.1
+tls-priorities = "NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM:+AES-256-GCM"
+auth-timeout = 240
+min-reauth-time = 3
+max-ban-score = 0
+ban-reset-time = 300
+cookie-timeout = 300
+deny-roaming = false
+rekey-time = 172800
+rekey-method = ssl
+use-utmp = true
+pid-file = /var/run/ocserv.pid
+device = vpns
+predictable-ips = true
+ipv4-network = 192.168.119.0/21
+tunnel-all-dns = true
+dns = 1.1.1.1
+dns = 8.8.8.8
+ping-leases = false
+cisco-client-compat = true
+dtls-legacy = true
+connect-script = /etc/ocserv/go_connect
+disconnect-script = /etc/ocserv/go_disconnect
+EOF
+} &>/dev/null
+}
 echo 'DNS=1.1.1.1
 DNSStubListener=no' >> /etc/systemd/resolved.conf
 
@@ -287,7 +348,7 @@ try-mtu-discovery = false
 switch-to-tcp-timeout = 25
 max-same-clients = 100
 cert-user-oid = 0.9.2342.19200300.100.1.1
-tls-priorities = "NORMAL:%COMPAT:-VERS-TLS1.3"
+tls-priorities = "NORMAL:-CIPHER-ALL:+CHACHA20-POLY1305:+AES-128-GCM"
 auth-timeout = 240
 min-reauth-time = 3
 max-ban-score = 0
@@ -340,8 +401,34 @@ clear
 install_firewall_kvm () {
 clear
 echo "Installing iptables."
-echo 1 > /proc/sys/net/ipv4/ip_forward
+echo "net.ipv4.ip_forward=1
+net.ipv4.conf.all.rp_filter=0
+net.ipv4.conf.all.accept_source_route=1
+net.ipv4.conf.all.send_redirects=0" >> /etc/sysctl.conf
 sysctl -p
+{
+iptables -F
+iptables -t nat -F
+# Port Opening
+iptables -A INPUT -p tcp --dport $PORT_TCP -j ACCEPT
+iptables -A INPUT -p udp --dport $PORT_TCP -j ACCEPT
+iptables -A INPUT -p tcp --dport $PORT_SSL -j ACCEPT
+
+# Forwarding & Masquerade (জরুরি অংশ)
+iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A FORWARD -s 192.168.119.0/21 -j ACCEPT
+iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $server_interface -j MASQUERADE
+
+# MTU Fix (Windows 11 এবং অ্যাপ কানেক্টিভিটির জন্য)
+iptables -I FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+iptables-save > /etc/iptables_rules.v4
+ip6tables-save > /etc/iptables_rules.v6
+}&>/dev/null
+}
+clear
+echo "Installing iptables."
+echo "net.ipv4.ip_forward=1
 net.ipv4.conf.all.rp_filter=0
 net.ipv4.conf."$server_interface".rp_filter=0" >> /etc/sysctl.conf
 sysctl -p
@@ -750,4 +837,3 @@ install_firewall_kvm
 install_stunnel
 install_rclocal
 start_service
-
