@@ -7,7 +7,7 @@ DBNAME='brk26_vip';
 PORT_TCP='1194';
 PORT_UDP='1194';
 PORT_SSL='443';
-OBFS='radeveloper';
+OBFS='vollam';
 HYSTERIA_TYPE='default';
 
 timedatectl set-timezone Asia/Riyadh
